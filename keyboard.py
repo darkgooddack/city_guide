@@ -10,11 +10,11 @@ def get_main_keyboard():
         resize_keyboard=True
     )
 
-def get_settings_keyboard():
+def get_recomendation_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="🍴 Предпочтения в кухне"), KeyboardButton(text="🎭 Интересы")],
-            [KeyboardButton(text="💰 Бюджет"), KeyboardButton(text="⏱️ Доступное время")],
+            [KeyboardButton(text="🍴 Где поесть"), KeyboardButton(text="🎭 Интересы")],
+            [KeyboardButton(text="ююю"), KeyboardButton(text="⏪ Назад")],
         ],
         resize_keyboard=True
     )
@@ -51,16 +51,6 @@ def get_park_keyboard():
         resize_keyboard=True
     )
 
-def get_recomendation_keyboard():
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="🍴 Еда"), KeyboardButton(text="🏯 Культурные объекты")],
-            [KeyboardButton(text="🎬 Кино"), KeyboardButton(text="🌲Места для прогулки")],
-            [KeyboardButton(text="⏪ Назад")],
-        ],
-        resize_keyboard=True
-    )
-
 
 def get_inline_subscription_keyboard():
     subscribe_button = InlineKeyboardButton(text="Подписаться на рассылку", callback_data="subscribe")
@@ -84,14 +74,6 @@ keyboard_settings = InlineKeyboardMarkup(
             [InlineKeyboardButton(text="Изменить бюджет", callback_data="edit_budget")],
             [InlineKeyboardButton(text="Изменить уведомления", callback_data="edit_notifications")],
         ],
-)
-
-keyboard_cuisine = InlineKeyboardMarkup(
-    inline_keyboard=[
-        [InlineKeyboardButton(text="Итальянская", callback_data="set_cuisine_italian")],
-        [InlineKeyboardButton(text="Японская", callback_data="set_cuisine_japanese")],
-        [InlineKeyboardButton(text="Французская", callback_data="set_cuisine_french")]
-    ]
 )
 
 keyboard_interests = InlineKeyboardMarkup(

@@ -1,12 +1,19 @@
 from aiogram import Router, types
-from aiogram.fsm.state import StatesGroup
-from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, \
+    KeyboardButton
 from aiogram.filters import Command
 from aiogram import F
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
+from sqlalchemy import update
+from sqlalchemy.future import select
 import keyboard
 from database import get_db
 import crud
 from database import async_session_factory
+from models import FoodPlase, User, Kitchen, Food_place_Kitchen
+from urllib.parse import urlparse, parse_qs, unquote
+
 
 
 router = Router()
@@ -23,8 +30,12 @@ async def start_handler(msg: Message):
                 text=f"Привет, {msg.from_user.full_name}! 👋 Добро пожаловать в City Guide Ростов-на-Дону! "
                      "📍 Я помогу вам найти лучшие места, маршруты и мероприятия, учитывая ваши интересы, локацию и время. "
                      "🎨 Откройте для себя культурные традиции и уникальные уголки города!",
-                reply_markup=keyboard.get_inline_subscription_keyboard()  # Инлайн кнопка подписки
+                reply_markup=keyboard.get_inline_subscription_keyboard()
             )
+        else:
+            greeting = f"Привет, {msg.from_user.full_name}! 👋 Мы рады, что вы снова с нами!"
+
+        await msg.answer("Выберите один из вариантов:", reply_markup=keyboard.get_main_keyboard())
 
 
 @router.callback_query(lambda c: c.data == "subscribe")
@@ -44,13 +55,121 @@ async def menu(msg: Message):
 async def recomendations(msg: Message):
     await msg.answer("Выберите куда вы хотите пойти:", reply_markup=keyboard.get_recomendation_keyboard())
 
-@router.message(F.text == "🍴 Еда")
-async def food_place(msg: Message):
-    await msg.answer("*список заведений*:", reply_markup=keyboard.get_food_place_keyboard())
 
-@router.message(F.text == "🏯 Культурные объекты")
-async def cultural_place(msg: Message):
-    await msg.answer("*список заведений*:", reply_markup=keyboard.get_cultural_place_keyboard())
+@router.message(F.text == "🍴 Где поесть")
+async def food_place(msg: types.Message):
+    async for session in get_db():
+        try:
+            user_id = msg.from_user.id
+            result = await session.execute(
+                select(User).where(User.telegram_id == user_id)
+            )
+            user = result.scalars().first()
+
+            if not user or not user.cuisine_preferences:
+                await msg.answer("Мы не знаем ваши предпочтения. Укажите, какая кухня вам нравится!")
+                return
+
+            cuisine_preferences = user.cuisine_preferences
+
+            keyboard = ReplyKeyboardMarkup(
+                keyboard=[[KeyboardButton(text="📍 Отправить геолокацию", request_location=True)]],
+                resize_keyboard=True,
+                one_time_keyboard=True
+            )
+
+            await msg.answer(
+                "Пожалуйста, отправьте свою геолокацию, чтобы мы могли подобрать ближайшие заведения.",
+                reply_markup=keyboard
+            )
+
+        finally:
+            await session.close()
+
+
+@router.message(F.location)
+async def handle_location(msg: types.Message):
+    async for session in get_db():
+
+        try:
+            user_lat = msg.location.latitude
+            user_lon = msg.location.longitude
+
+            result = await session.execute(
+                select(User).where(User.telegram_id == msg.from_user.id)
+            )
+            user = result.scalars().first()
+
+            if not user or not user.cuisine_preferences:
+                await msg.answer("Мы не знаем ваши предпочтения. Укажите, какая кухня вам нравится!")
+                return
+
+            cuisine_preferences = user.cuisine_preferences.split(",")
+
+            restaurants = await get_restaurants(cuisine_preferences, session)
+
+            if not restaurants:
+                await msg.answer("К сожалению, мы не нашли подходящих заведений.")
+                return
+
+            response = "Мы подобрали для вас следующие заведения:\n\n"
+            for restaurant in restaurants[:5]:
+                route_url = generate_yandex_maps_route(user_lat, user_lon, restaurant.link_map)
+                response += (
+                    f"🏠 <b>{restaurant.name}</b>\n"
+                    f"📋 {restaurant.description}\n"
+                    f"📍 Адрес: {restaurant.address}\n"
+                    f"🕒 Время работы: {restaurant.time}\n"
+                    f"💵 Средний бюджет: {restaurant.budget} руб.\n"
+                    f"🚗 <a href=\"{route_url}\">Построить маршрут</a>\n\n"
+                )
+
+            await msg.answer(response, parse_mode="HTML")
+
+        finally:
+            await session.close()
+
+
+#async def get_restaurants(preferences: list[str], session: AsyncSession):
+        #    result = await session.execute(
+        #select(FoodPlase)
+        #.where(FoodPlase.name.in_(preferences))
+        #.order_by(FoodPlase.budget.asc())
+    #)
+    #return result.scalars().all()
+
+async def get_restaurants(preferences: list[str], session: AsyncSession):
+    result = await session.execute(
+        select(FoodPlase)
+        .join(Food_place_Kitchen, FoodPlase.id == Food_place_Kitchen.food_place_id)
+        .join(Kitchen, Kitchen.id == Food_place_Kitchen.kitchen_id)
+        .where(Kitchen.name.in_(preferences))
+        .order_by(FoodPlase.budget.asc())
+    )
+    return result.scalars().all()
+
+# Function to generate a Yandex Maps route URL
+def generate_yandex_maps_route(user_lat: float, user_lon: float, restaurant_link: str):
+    parsed_url = urlparse(restaurant_link)
+    query_params = parse_qs(parsed_url.query)
+
+    if 'll' in query_params:
+        restaurant_coords = query_params['ll'][0]
+
+        restaurant_coords = unquote(restaurant_coords)
+
+        restaurant_lon, restaurant_lat = map(float, restaurant_coords.split(','))
+
+        base_url = "https://yandex.by/maps/?rtext="
+        route_url = f"{base_url}{user_lat},{user_lon}~{restaurant_lat},{restaurant_lon}&rtt=auto"
+        return route_url
+    else:
+        return "Ошибка: не удалось извлечь координаты ресторана из ссылки."
+
+
+@router.message(F.text == "🏯🎭 Интересы")
+async def intresting(msg: Message):
+    await msg.answer("*список заведений*:", reply_markup=keyboard.get_intresting())
 
 @router.message(F.text == "🎬 Кино")
 async def cinema(msg: Message):
@@ -92,10 +211,48 @@ async def settings(message: types.Message):
         await message.reply(user_info, reply_markup=keyboard.keyboard_settings)
 
 
+def generate_cuisine_keyboard():
+    cuisines = ["Японская", "Китайская", "Русская", "Французская"]
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=cuisine, callback_data=f"cuisine_{cuisine}")]
+            for cuisine in cuisines
+        ]
+    )
+    return keyboard
+
+
 @router.callback_query(lambda c: c.data == "edit_cuisine")
 async def change_cuisine(callback_query: CallbackQuery):
     await callback_query.message.edit_text("Выберите новую кухню:")
-    await callback_query.message.edit_reply_markup(keyboard.keyboard_cuisine)
+
+    await callback_query.message.edit_reply_markup(reply_markup=generate_cuisine_keyboard())
+
+
+@router.callback_query(lambda c: c.data.startswith("cuisine_"))
+async def save_cuisine(callback_query: CallbackQuery):
+    async for session in get_db():
+        selected_cuisine = callback_query.data.split("_")[1]
+
+        user_id = callback_query.from_user.id
+
+        stmt = (
+            update(User)
+            .where(User.telegram_id == user_id)
+            .values(cuisine_preferences=selected_cuisine)
+        )
+        await session.execute(stmt)
+        await session.commit()
+
+        await callback_query.message.edit_text(f"Ваши предпочтения обновлены: {selected_cuisine} кухня!")
+
+
+
+
+
+
+
+
 
 # Обработчик на кнопку "Изменить интересы" дописать
 @router.callback_query(lambda c: c.data == "edit_interests")

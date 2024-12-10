@@ -17,7 +17,7 @@ from handlers import router
 async def main():
     bot = Bot(
         token=settings.BOT_TOKEN,
-        default=DefaultBotProperties(parse_mode=ParseMode.HTML)  # Use this for parse_mode
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML)
     )
     dp = Dispatcher(storage=MemoryStorage())
     dp.include_router(router)

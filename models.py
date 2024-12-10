@@ -1,6 +1,9 @@
 from sqlalchemy import BigInteger
-from sqlalchemy.orm import Mapped, mapped_column
 from database import Base
+from sqlalchemy.orm import relationship
+from sqlalchemy import ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column
+
 
 class User(Base):
     __tablename__ = 'users'
@@ -13,5 +16,41 @@ class User(Base):
     available_time: Mapped[str] = mapped_column(nullable=True)
     budget: Mapped[int] = mapped_column(nullable=True)
     notifications: Mapped[bool] = mapped_column(nullable=True)
+
+
+class FoodPlase(Base):
+    __tablename__ = 'food_place'
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(nullable=True)
+    description: Mapped[str] = mapped_column(nullable=True)
+    address: Mapped[str] = mapped_column(nullable=True)
+    link_map: Mapped[str] = mapped_column(nullable=True)
+    time: Mapped[str] = mapped_column(nullable=True)
+    budget: Mapped[int] = mapped_column(nullable=True)
+
+    food_place_kitchens = relationship("Food_place_Kitchen", back_populates="food_place")
+
+
+class Food_place_Kitchen(Base):
+    __tablename__ = 'food_place_kitchen'
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    food_place_id: Mapped[int] = mapped_column(ForeignKey('food_place.id'), nullable=False)
+    kitchen_id: Mapped[int] = mapped_column(ForeignKey('kitchen.id'), nullable=False)
+
+    food_place = relationship("FoodPlase", back_populates="food_place_kitchens")
+
+    kitchen = relationship("Kitchen", back_populates="food_place_kitchens")
+
+
+class Kitchen(Base):
+    __tablename__ = 'kitchen'
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(nullable=True)
+
+    food_place_kitchens = relationship("Food_place_Kitchen", back_populates="kitchen")
+
 
 

@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 from models import User
 from sqlalchemy.future import select
+from sqlalchemy import update
 
 
 async def add_user(user_id: int, username: str, session: AsyncSession):
@@ -47,4 +48,13 @@ async def update_budget(telegram_id: int, new_budget: int, session: AsyncSession
 
     user.budget = new_budget
     session.add(user)
+    await session.commit()
+
+async def update_cuisine_preferences(session: AsyncSession, telegram_id: int, cuisine: str) -> None:
+    stmt = (
+        update(User)
+        .where(User.telegram_id == telegram_id)
+        .values(cuisine_preferences=cuisine)
+    )
+    await session.execute(stmt)
     await session.commit()
