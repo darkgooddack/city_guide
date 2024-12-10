@@ -75,3 +75,29 @@ def return_keyboard():
         ],
         resize_keyboard=True
     )
+
+keyboard_settings = InlineKeyboardMarkup(
+    inline_keyboard=[
+            [InlineKeyboardButton(text="Изменить кухню", callback_data="edit_cuisine")],
+            [InlineKeyboardButton(text="Изменить интересы", callback_data="edit_interests")],
+            [InlineKeyboardButton(text="Изменить время", callback_data="edit_time")],
+            [InlineKeyboardButton(text="Изменить бюджет", callback_data="edit_budget")],
+            [InlineKeyboardButton(text="Изменить уведомления", callback_data="edit_notifications")],
+        ],
+)
+
+keyboard_cuisine = InlineKeyboardMarkup(
+    inline_keyboard=[
+        [InlineKeyboardButton(text="Итальянская", callback_data="set_cuisine_italian")],
+        [InlineKeyboardButton(text="Японская", callback_data="set_cuisine_japanese")],
+        [InlineKeyboardButton(text="Французская", callback_data="set_cuisine_french")]
+    ]
+)
+
+keyboard_interests = InlineKeyboardMarkup(
+    inline_keyboard=[
+        [InlineKeyboardButton(text="Путешествия", callback_data="set_interest_travel")],
+        [InlineKeyboardButton(text="Технологии", callback_data="set_interest_technology")],
+        [InlineKeyboardButton(text="Кулинария", callback_data="set_interest_cooking")]
+    ]
+)
