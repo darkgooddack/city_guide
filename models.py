@@ -1,4 +1,3 @@
-from sqlalchemy import Table, Column, Integer, String, Boolean, MetaData
 from sqlalchemy.orm import Mapped, mapped_column
 from database import Base
 
@@ -12,3 +11,6 @@ class User(Base):
     interests: Mapped[str] = mapped_column(nullable=True)
     available_time: Mapped[str] = mapped_column(nullable=True)
     budget: Mapped[int] = mapped_column(nullable=True)
+    notifications: Mapped[bool] = mapped_column(nullable=True)
+
+
