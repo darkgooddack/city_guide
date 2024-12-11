@@ -63,10 +63,10 @@ pip install -r requirements.txt
 ### 3. Настройка переменных окружения
 
 Создайте файл .env в корневом каталоге проекта и добавьте следующие переменные окружения:
-```python
+```
 # telegram bot
 BOT_TOKEN=your_bot_token
-
+    
 # PostgreSQL
 DB_HOST=your_db_host
 DB_PORT=your_db_port
@@ -79,13 +79,13 @@ DB_PASS=your_db_pass
 ### 4. Создание и инициализация базы данных
 
 Создайте базу данных и выполните миграции:
-```bash
+```
 alembic upgrade head
 ```
 ### 5. Запуск бота
 
 После выполнения всех предыдущих шагов, вы можете запустить бота с помощью следующей команды:
-```python
+```
 python main.py
 ```
 

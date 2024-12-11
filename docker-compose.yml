@@ -10,7 +10,8 @@ services:
       - db
     volumes:
       - .:/app
-    command: python main.py
+    #command: python main.py
+    command: bash -c "alembic upgrade head && python main.py"
     restart: always
 
   db:
@@ -24,6 +25,7 @@ services:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql # под вопросом
     restart: always
 
 volumes:
