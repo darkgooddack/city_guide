@@ -1,8 +1,15 @@
+import re
+from datetime import datetime
+
+import requests
 from aiogram import Router, types
+from aiogram.client.session import aiohttp
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, \
-    KeyboardButton
+    KeyboardButton, ReplyKeyboardRemove
 from aiogram.filters import Command
 from aiogram import F
+from aiohttp import ClientSession
+from bs4 import BeautifulSoup
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 from sqlalchemy import update
@@ -11,9 +18,11 @@ import keyboard
 from database import get_db
 import crud
 from database import async_session_factory
-from models import FoodPlase, User, Kitchen, Food_place_Kitchen
+from models import FoodPlace, User, Kitchen, Food_place_Kitchen
 from urllib.parse import urlparse, parse_qs, unquote
-
+from aiogram.fsm.context import FSMContext  # Новый импорт
+from aiogram.fsm.state import State,StatesGroup # Новый импорт
+from aiogram.filters.state import StateFilter
 
 
 router = Router()
@@ -54,6 +63,9 @@ async def menu(msg: Message):
 @router.message(F.text == "✨ Рекомендации")
 async def recomendations(msg: Message):
     await msg.answer("Выберите куда вы хотите пойти:", reply_markup=keyboard.get_recomendation_keyboard())
+
+
+
 
 
 @router.message(F.text == "🍴 Где поесть")
@@ -129,26 +141,19 @@ async def handle_location(msg: types.Message):
         finally:
             await session.close()
 
+    await msg.answer("Выберите один из вариантов:", reply_markup=keyboard.get_main_keyboard())
 
-#async def get_restaurants(preferences: list[str], session: AsyncSession):
-        #    result = await session.execute(
-        #select(FoodPlase)
-        #.where(FoodPlase.name.in_(preferences))
-        #.order_by(FoodPlase.budget.asc())
-    #)
-    #return result.scalars().all()
 
 async def get_restaurants(preferences: list[str], session: AsyncSession):
     result = await session.execute(
-        select(FoodPlase)
-        .join(Food_place_Kitchen, FoodPlase.id == Food_place_Kitchen.food_place_id)
+        select(FoodPlace)
+        .join(Food_place_Kitchen, FoodPlace.id == Food_place_Kitchen.food_place_id)
         .join(Kitchen, Kitchen.id == Food_place_Kitchen.kitchen_id)
         .where(Kitchen.name.in_(preferences))
-        .order_by(FoodPlase.budget.asc())
+        .order_by(FoodPlace.budget.asc())
     )
     return result.scalars().all()
 
-# Function to generate a Yandex Maps route URL
 def generate_yandex_maps_route(user_lat: float, user_lon: float, restaurant_link: str):
     parsed_url = urlparse(restaurant_link)
     query_params = parse_qs(parsed_url.query)
@@ -167,22 +172,169 @@ def generate_yandex_maps_route(user_lat: float, user_lon: float, restaurant_link
         return "Ошибка: не удалось извлечь координаты ресторана из ссылки."
 
 
-@router.message(F.text == "🏯🎭 Интересы")
-async def intresting(msg: Message):
-    await msg.answer("*список заведений*:", reply_markup=keyboard.get_intresting())
+async def parse_discounts():
+    url = "https://edadeal.ru/journal/tags/aktsii-nedeli/"
+    async with ClientSession() as session:
+        async with session.get(url) as response:
+            if response.status == 200:
+                html = await response.text()
+                soup = BeautifulSoup(html, "html.parser")
 
-@router.message(F.text == "🎬 Кино")
-async def cinema(msg: Message):
-    await msg.answer("*список заведений*:", reply_markup=keyboard.get_cinema_keyboard())
+                image_links = []
+                rows = soup.find_all("div", class_="row")
+                for row in rows:
+                    divs = row.find_all("div", class_="col-lg-6")
+                    for div in divs:
 
-@router.message(F.text == "🌲Места для прогулки")
+                        picture = div.find("picture", class_="slick-slide slick-current slick-active")
+                        if picture:
+                            source = picture.find("source", {"srcset": True})
+                            if source:
+                                srcset = source.get("srcset", "").split(" ")[0]
+                                if srcset:
+                                    absolute_url = "https://edadeal.ru" + srcset
+                                    image_links.append(absolute_url)
+
+                        additional_source = div.find("source", {"srcset": True})
+                        if additional_source:
+                            additional_srcset = additional_source.get("srcset", "").split(" ")[0]
+                            if additional_srcset and additional_srcset not in image_links:
+                                absolute_url = "https://edadeal.ru" + additional_srcset
+                                image_links.append(absolute_url)
+
+                return image_links[:5]
+            else:
+                return []
+
+
+
+
+
+
+
+
+@router.message(F.text == "💸 Скидки и акции")
+async def discounts_handler(msg: Message):
+    await msg.answer("Собираю скидки, пожалуйста, подождите...")
+
+    try:
+        image_links = await parse_discounts()
+
+        if image_links:
+            for link in image_links:
+                await msg.answer_photo(photo=link)
+        else:
+            await msg.answer("К сожалению, скидок пока нет.")
+    except Exception as e:
+        await msg.answer(f"Произошла ошибка: {e}")
+
+    await msg.answer("Возвращайтесь позже!")
+
+
+DATE_PATTERN = r"^\d{4}-\d{2}-\d{2}$"
+
+
+class Form(StatesGroup):
+    waiting_for_date = State()
+
+
+def get_events(date: str):
+    url = f"https://afisha.yandex.ru/rostov-na-donu/selections/nearest-events?date={date}&period=1"
+    response = requests.get(url)
+    soup = BeautifulSoup(response.text, 'html.parser')
+
+    events = []
+    event_blocks = soup.find_all('div', class_='event events-list__item yandex-sans')
+
+    for event in event_blocks[:5]:  # Берем только первые 5 мероприятий
+        img_tag = event.find('img')
+        img_url = img_tag['src'] if img_tag else 'Нет изображения'
+
+        link_tag = event.find('a', class_='PlaceLink-fq4hbj-2 fYljjI')
+        event_name = link_tag['title'] if link_tag else 'Название не найдено'
+        event_link = 'https://afisha.yandex.ru' + link_tag['href'] if link_tag else None
+
+        events.append({
+            'name': event_name,
+            'link': event_link,
+            'img': img_url
+        })
+
+    return events
+
+
+@router.message(lambda message: message.text == "📢 Мероприятия")
+async def ask_for_date(msg: Message, state: FSMContext):
+    await msg.answer("Пожалуйста, выбери дату мероприятия (например: 2024-12-16).", reply_markup=ReplyKeyboardRemove())
+    await state.set_state(Form.waiting_for_date)  # set_state()
+
+@router.message(StateFilter(Form.waiting_for_date))
+async def process_date(msg: Message, state: FSMContext):
+    date = msg.text.strip()
+
+    if re.match(DATE_PATTERN, date):
+        try:
+            datetime.strptime(date, "%Y-%m-%d")
+        except ValueError:
+            await msg.answer("Введите дату в правильном формате (YYYY-MM-DD). Попробуйте еще раз.")
+            return
+
+        events = get_events(date)
+
+        if not events:
+            await msg.answer("Извините, на эту дату нет мероприятий.")
+            await state.clear()
+            return
+
+        for event in events[:4]:
+            caption = f"{event['name']}\n{event['link'] if event['link'] else 'Ссылка не найдена'}"
+            await msg.answer(caption)
+
+            if event['link'] and event['link'] != 'Ссылка не найдена':
+                inline_keyboard = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [InlineKeyboardButton(text="Перейти", url=event['link'])]
+                    ]
+                )
+
+                await msg.answer(event['img'], reply_markup=inline_keyboard)
+            else:
+
+                await msg.answer(event['img'])
+
+        main_keyboard = keyboard.get_main_keyboard()
+        await msg.answer("Вот мероприятия на выбранную дату:", reply_markup=main_keyboard)
+
+        await state.clear()
+
+    else:
+        await msg.answer("Введите дату в правильном формате (YYYY-MM-DD). Попробуйте еще раз.")
+
+
+
+
+
+
+
+@router.message(F.text == "🎭 Культура")
+async def culture(msg: Message):
+    await msg.answer("Пока пусто:", reply_markup=keyboard.return_keyboard())
+
+
+@router.message(F.text == "🌲 Парки")
 async def park(msg: Message):
-    await msg.answer("*список заведений*:", reply_markup=keyboard.get_park_keyboard())
+    await msg.answer("Пока пусто:", reply_markup=keyboard.return_keyboard())
 
 
 @router.message(F.text == "⏪ Назад")
 async def to_the_beginning(msg: Message):
     await msg.answer("Вернуться в начало", reply_markup=keyboard.get_main_keyboard())
+
+
+
+
+
+
 
 
 @router.message(F.text == "⚙️ Настройки")
@@ -251,19 +403,16 @@ async def save_cuisine(callback_query: CallbackQuery):
 
 
 
-
-
-
-# Обработчик на кнопку "Изменить интересы" дописать
 @router.callback_query(lambda c: c.data == "edit_interests")
 async def change_interests(callback_query: CallbackQuery):
-    await callback_query.message.edit_text("Выберите новый интерес:")
-    await callback_query.message.edit_reply_markup(keyboard.keyboard_interests)
+    pass
 
-# Обработчик на кнопку "Изменить время" дописать
 @router.callback_query(lambda c: c.data == "edit_time")
 async def change_time(callback_query: CallbackQuery):
-    await callback_query.message.edit_text("Пожалуйста, укажите доступное время для общения.")
+    pass
+
+
+
 
 
 @router.callback_query(lambda c: c.data == "edit_budget")
@@ -282,6 +431,7 @@ async def change_budget(callback_query: CallbackQuery):
         reply_markup=keyboard_budget
     )
 
+
 @router.callback_query(lambda c: c.data.startswith("set_budget_"))
 async def set_budget(callback_query: CallbackQuery):
     budget_str = callback_query.data.replace("set_budget_", "")
@@ -299,6 +449,10 @@ async def set_budget(callback_query: CallbackQuery):
     await callback_query.answer(f"Бюджет обновлен на {budget} ₽!")
 
     await send_user_info(callback_query, user_id)
+
+
+
+
 
 
 @router.callback_query(lambda c: c.data == "edit_notifications")

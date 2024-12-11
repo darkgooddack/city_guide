@@ -5,7 +5,7 @@ def get_main_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="✨ Рекомендации"), KeyboardButton(text="📢 Мероприятия")],
-            [KeyboardButton(text="🎉 Новости и тренды"), KeyboardButton(text="⚙️ Настройки")],
+            [KeyboardButton(text="💸 Скидки и акции"), KeyboardButton(text="⚙️ Настройки")],
         ],
         resize_keyboard=True
     )
@@ -13,40 +13,8 @@ def get_main_keyboard():
 def get_recomendation_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="🍴 Где поесть"), KeyboardButton(text="🎭 Интересы")],
-            [KeyboardButton(text="ююю"), KeyboardButton(text="⏪ Назад")],
-        ],
-        resize_keyboard=True
-    )
-
-def get_food_place_keyboard():
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="⏪ Назад"), KeyboardButton(text="⬅️Предыдущая"), KeyboardButton(text="➡️Следующая")],
-        ],
-        resize_keyboard=True
-    )
-
-def get_cinema_keyboard():
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="⏪ Назад"), KeyboardButton(text="⬅️Предыдущая"), KeyboardButton(text="➡️Следующая")],
-        ],
-        resize_keyboard=True
-    )
-
-def get_cultural_place_keyboard():
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="⏪ Назад"), KeyboardButton(text="⬅️Предыдущая"), KeyboardButton(text="➡️Следующая")],
-        ],
-        resize_keyboard=True
-    )
-
-def get_park_keyboard():
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="⏪ Назад"), KeyboardButton(text="⬅️Предыдущая"), KeyboardButton(text="➡️Следующая")],
+            [KeyboardButton(text="🍴 Где поесть"), KeyboardButton(text="🎭 Культура")],
+            [KeyboardButton(text="🌲 Парки"), KeyboardButton(text="⏪ Назад")],
         ],
         resize_keyboard=True
     )

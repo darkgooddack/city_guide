@@ -18,7 +18,7 @@ class User(Base):
     notifications: Mapped[bool] = mapped_column(nullable=True)
 
 
-class FoodPlase(Base):
+class FoodPlace(Base):
     __tablename__ = 'food_place'
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -39,7 +39,7 @@ class Food_place_Kitchen(Base):
     food_place_id: Mapped[int] = mapped_column(ForeignKey('food_place.id'), nullable=False)
     kitchen_id: Mapped[int] = mapped_column(ForeignKey('kitchen.id'), nullable=False)
 
-    food_place = relationship("FoodPlase", back_populates="food_place_kitchens")
+    food_place = relationship("FoodPlace", back_populates="food_place_kitchens")
 
     kitchen = relationship("Kitchen", back_populates="food_place_kitchens")
 
@@ -52,5 +52,8 @@ class Kitchen(Base):
 
     food_place_kitchens = relationship("Food_place_Kitchen", back_populates="kitchen")
 
+class Interests(Base):
+    __tablename__ = 'interests'
 
-
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(nullable=True)
